@@ -13,7 +13,7 @@ target = 'risk_score'
 X = df[features]
 y = df[target]
 
-# Use regressor instead of classifier
+
 model = GradientBoostingRegressor()
 model.fit(X, y)
 

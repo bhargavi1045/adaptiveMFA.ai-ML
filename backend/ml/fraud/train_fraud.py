@@ -1,3 +1,4 @@
+
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
@@ -5,13 +6,10 @@ from sklearn.metrics import classification_report, roc_auc_score
 import joblib
 import os
 
-# Base directory
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Load dataset
 df = pd.read_csv(os.path.join(BASE_DIR, 'datasets', 'fraud', 'fraud_cases.csv'))
 
-# Features and target
 features = ['risk_score', 'failed_attempts', 'session_duration_s']
 target = 'is_fraud'
 
