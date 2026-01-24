@@ -1,4 +1,12 @@
 .env
+venv
 node_modules/
 datasets/**/*.csv
 ml/**/*.pkl
+
+__pycache__/
+*.py[cod]
+*.pyc
+*.pyo
+*.pyd
+.Python
