@@ -1,8 +1,3 @@
-/**
- * Decision Agent
- * Makes final MFA decision based on all agent analyses
- */
-
 import { BehaviorAgent } from './behavior.agent';
 import { ContextAgent } from './context.agent';
 import { RiskAgent } from './risk.agent';
@@ -58,14 +53,10 @@ export class DecisionAgent {
     this.fraudAgent = new FraudAgent();
   }
 
-  /**
-   * Make final MFA decision based on all agent analyses
-   */
   async decide(context: DecisionContext): Promise<MFADecision> {
     const reasons: string[] = [];
     const recommendations: string[] = [];
 
-    // Extract key metrics from each agent
     const metrics = {
       behaviorScore: context.behaviorAnalysis.anomalyScore,
       contextScore: context.contextAnalysis.riskProbability,
@@ -73,17 +64,14 @@ export class DecisionAgent {
       fraudScore: context.fraudAnalysis.fraudProbability
     };
 
-    // Calculate weighted overall score
     const overallScore =
       metrics.behaviorScore * this.weights.behavior +
       metrics.contextScore * this.weights.context +
       metrics.riskScore * this.weights.risk +
       metrics.fraudScore * this.weights.fraud;
 
-    // Get risk level from risk agent
     const riskLevel = context.riskAnalysis.riskLevel;
 
-    // Collect reasons from all agents
     if (context.behaviorAnalysis.isAnomaly) {
       reasons.push('Behavioral anomaly detected');
       reasons.push(...context.behaviorAnalysis.reasons.slice(0, 2));
@@ -101,13 +89,11 @@ export class DecisionAgent {
 
     reasons.push(...context.riskAnalysis.reasons.slice(0, 2));
 
-    // Decision rules
     let decision: 'ALLOW' | 'REQUIRE_MFA' | 'REQUIRE_STRONG_MFA' | 'DENY' | 'MONITOR';
     let mfaRequired = false;
     let allowedMethods: ('totp' | 'sms' | 'email' | 'biometric' | 'hardware_key')[] = [];
     let expiresIn: number | undefined;
 
-    // Rule 1: DENY - Critical fraud or very high risk
     if (
       context.fraudAnalysis.threatLevel === 'CRITICAL' ||
       (context.fraudAnalysis.isFraud && context.fraudAnalysis.fraudProbability > 0.9) ||
@@ -120,7 +106,7 @@ export class DecisionAgent {
       recommendations.push('Alert security team and user');
       recommendations.push('Require account verification');
     }
-    // Rule 2: REQUIRE_STRONG_MFA - High fraud or critical risk
+  
     else if (
       context.fraudAnalysis.threatLevel === 'HIGH' ||
       riskLevel === 'CRITICAL' ||
@@ -130,12 +116,12 @@ export class DecisionAgent {
       decision = 'REQUIRE_STRONG_MFA';
       mfaRequired = true;
       allowedMethods = ['totp', 'hardware_key'];
-      expiresIn = 300; // 5 minutes
+      expiresIn = 300; 
       reasons.push('Strong authentication required due to high risk');
       recommendations.push('Use strongest available MFA method');
       recommendations.push('Consider biometric verification');
     }
-    // Rule 3: REQUIRE_MFA - Medium-high risk
+
     else if (
       riskLevel === 'HIGH' ||
       context.fraudAnalysis.threatLevel === 'MEDIUM' ||
@@ -147,11 +133,11 @@ export class DecisionAgent {
       decision = 'REQUIRE_MFA';
       mfaRequired = true;
       allowedMethods = ['totp', 'sms', 'email'];
-      expiresIn = 600; // 10 minutes
+      expiresIn = 600; 
       reasons.push('Additional authentication required');
       recommendations.push('Complete MFA verification');
     }
-    // Rule 4: MONITOR - Medium risk
+   
     else if (
       riskLevel === 'MEDIUM' ||
       overallScore > 0.5 ||
@@ -163,7 +149,7 @@ export class DecisionAgent {
       recommendations.push('Monitor subsequent actions closely');
       recommendations.push('Consider enabling MFA');
     }
-    // Rule 5: ALLOW - Low risk
+   
     else {
       decision = 'ALLOW';
       mfaRequired = false;
@@ -171,7 +157,7 @@ export class DecisionAgent {
       recommendations.push('Continue standard monitoring');
     }
 
-    // Trusted device exception
+  
     if (
       context.userProfile.isTrustedDevice &&
       riskLevel !== 'CRITICAL' &&
@@ -186,7 +172,6 @@ export class DecisionAgent {
       }
     }
 
-    // Always require MFA if user has it enabled (unless DENY)
     if (context.userProfile.mfaEnabled && decision !== 'DENY') {
       if (decision === 'ALLOW' || decision === 'MONITOR') {
         decision = 'REQUIRE_MFA';
@@ -196,7 +181,6 @@ export class DecisionAgent {
       }
     }
 
-    // Calculate overall confidence
     const confidence = this.calculateOverallConfidence(
       context.behaviorAnalysis.confidence,
       context.contextAnalysis.confidence,
@@ -204,7 +188,6 @@ export class DecisionAgent {
       context.fraudAnalysis.confidence
     );
 
-    // Collect all recommendations
     recommendations.push(
       ...context.behaviorAnalysis.recommendations.slice(0, 2),
       ...context.contextAnalysis.recommendations.slice(0, 2),
@@ -212,7 +195,6 @@ export class DecisionAgent {
       ...context.fraudAnalysis.recommendations.slice(0, 2)
     );
 
-    // Remove duplicates
     const uniqueReasons = [...new Set(reasons)];
     const uniqueRecommendations = [...new Set(recommendations)];
 
@@ -235,9 +217,7 @@ export class DecisionAgent {
     };
   }
 
-  /**
-   * Calculate overall confidence from all agents
-   */
+ 
   private calculateOverallConfidence(
     behaviorConf: number,
     contextConf: number,
@@ -252,9 +232,6 @@ export class DecisionAgent {
     );
   }
 
-  /**
-   * Adjust agent weights (for fine-tuning)
-   */
   setWeights(weights: {
     behavior?: number;
     context?: number;
@@ -266,7 +243,7 @@ export class DecisionAgent {
     if (weights.risk !== undefined) this.weights.risk = weights.risk;
     if (weights.fraud !== undefined) this.weights.fraud = weights.fraud;
 
-    // Normalize weights to sum to 1
+   
     const total =
       this.weights.behavior +
       this.weights.context +
@@ -281,9 +258,6 @@ export class DecisionAgent {
     }
   }
 
-  /**
-   * Get current weights
-   */
   getWeights() {
     return { ...this.weights };
   }

@@ -5,7 +5,6 @@ import uvicorn
 from contextlib import asynccontextmanager
 from predict import MLPredictor
 
-# ---------------- Pydantic models ----------------
 class BehaviorFeatures(BaseModel):
     keystroke_interval_ms: float = Field(..., ge=0)
     mouse_speed_px_s: float = Field(..., ge=0)
@@ -33,17 +32,15 @@ class AllFeatures(BaseModel):
     risk: RiskFeatures
     fraud: FraudFeatures
 
-# ---------------- Lifespan handler ----------------
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Load models on startup using the new FastAPI lifespan method"""
     app.state.predictor = MLPredictor()
     print("✅ All models loaded successfully")
     yield
-    # Optional: do shutdown cleanup here
+  
     print("Shutting down app...")
 
-# ---------------- FastAPI app ----------------
 app = FastAPI(
     title="Adaptive MFA API",
     description="Authentication security ML prediction service",
@@ -51,7 +48,6 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# ---------------- Routes ----------------
 @app.get("/")
 async def root():
     return {
@@ -117,6 +113,5 @@ async def predict_all(features: AllFeatures):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# ---------------- Main ----------------
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)

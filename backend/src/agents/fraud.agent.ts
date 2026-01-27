@@ -1,7 +1,4 @@
-/**
- * Fraud Agent
- * Detects fraudulent login attempts and account takeover
- */
+
 
 export interface FraudAnalysisResult {
   isFraud: boolean;
@@ -34,9 +31,6 @@ export class FraudAgent {
     min_device_consistency: 0.5
   };
 
-  /**
-   * Analyze for fraud indicators
-   */
   async analyze(
     indicators: FraudIndicators,
     mlPrediction?: {
@@ -56,7 +50,6 @@ export class FraudAgent {
     const metrics: Record<string, number> = {};
     const recommendations: string[] = [];
 
-    // Use ML prediction if available
     let isFraud = false;
     let fraudProbability = 0;
 
@@ -69,7 +62,7 @@ export class FraudAgent {
         reasons.push('ML model flagged as potential fraud');
       }
     } else {
-      // Calculate fraud score manually
+    
       const calculated = this.calculateFraudScore(indicators, loginHistory);
       fraudProbability = calculated.probability;
       isFraud = calculated.isFraud;
@@ -78,12 +71,10 @@ export class FraudAgent {
 
     metrics['fraud_probability'] = fraudProbability;
 
-    // Analyze individual fraud indicators
     const indicatorAnalysis = this.analyzeIndicators(indicators);
     reasons.push(...indicatorAnalysis.reasons);
     Object.assign(metrics, indicatorAnalysis.metrics);
 
-    // Check for account takeover patterns
     if (loginHistory) {
       const takeoverCheck = this.checkAccountTakeover(loginHistory);
       if (takeoverCheck.suspected) {
@@ -95,7 +86,6 @@ export class FraudAgent {
       }
     }
 
-    // Impossible travel detection
     if (indicators.impossibleTravel) {
       reasons.push('Impossible travel detected - login from distant location too quickly');
       metrics['impossible_travel'] = 1;
@@ -104,7 +94,6 @@ export class FraudAgent {
       fraudProbability = Math.max(fraudProbability, 0.85);
     }
 
-    // Automation/bot detection
     if (indicators.automationDetected) {
       reasons.push('Automated/bot activity detected');
       metrics['automation'] = 1;
@@ -112,11 +101,9 @@ export class FraudAgent {
       fraudProbability = Math.max(fraudProbability, 0.8);
     }
 
-    // Determine threat level
     const threatLevel = this.determineThreatLevel(fraudProbability, indicators);
     metrics['threat_level'] = this.threatLevelToNumber(threatLevel);
 
-    // Generate recommendations
     this.generateRecommendations(
       threatLevel,
       fraudProbability,
@@ -138,9 +125,7 @@ export class FraudAgent {
     };
   }
 
-  /**
-   * Calculate fraud score from indicators
-   */
+  
   private calculateFraudScore(
     indicators: FraudIndicators,
     history?: Array<any>
@@ -155,34 +140,28 @@ export class FraudAgent {
       automation: 0.10
     };
 
-    // Login frequency check
     if (indicators.loginFrequency24h > this.thresholds.max_login_frequency) {
       const excess = (indicators.loginFrequency24h - this.thresholds.max_login_frequency) / 10;
       score += Math.min(excess * weights.loginFrequency, weights.loginFrequency);
     }
 
-    // Multiple IPs check
     if (indicators.uniqueIPs24h > this.thresholds.max_unique_ips) {
       const excess = (indicators.uniqueIPs24h - this.thresholds.max_unique_ips) / 5;
       score += Math.min(excess * weights.uniqueIPs, weights.uniqueIPs);
     }
 
-    // Failed attempts ratio
     if (indicators.failedAttemptsRatio > this.thresholds.max_failed_ratio) {
       score += indicators.failedAttemptsRatio * weights.failedAttempts;
     }
 
-    // Device consistency (inverse)
     if (indicators.deviceConsistencyScore < this.thresholds.min_device_consistency) {
       score += (1 - indicators.deviceConsistencyScore) * weights.deviceConsistency;
     }
 
-    // Impossible travel (high weight)
     if (indicators.impossibleTravel) {
       score += weights.impossibleTravel;
     }
 
-    // Automation detection
     if (indicators.automationDetected) {
       score += weights.automation;
     }
@@ -193,40 +172,33 @@ export class FraudAgent {
     return { probability, isFraud };
   }
 
-  /**
-   * Analyze individual fraud indicators
-   */
+  
   private analyzeIndicators(
     indicators: FraudIndicators
   ): { reasons: string[]; metrics: Record<string, number> } {
     const reasons: string[] = [];
     const metrics: Record<string, number> = {};
 
-    // Login frequency
     metrics['login_frequency_24h'] = indicators.loginFrequency24h;
     if (indicators.loginFrequency24h > this.thresholds.max_login_frequency) {
       reasons.push(`Abnormally high login frequency: ${indicators.loginFrequency24h} attempts in 24h`);
     }
 
-    // Multiple IPs
     metrics['unique_ips_24h'] = indicators.uniqueIPs24h;
     if (indicators.uniqueIPs24h > this.thresholds.max_unique_ips) {
       reasons.push(`Multiple IP addresses: ${indicators.uniqueIPs24h} different IPs in 24h`);
     }
 
-    // Failed attempts
     metrics['failed_attempts_ratio'] = indicators.failedAttemptsRatio;
     if (indicators.failedAttemptsRatio > this.thresholds.max_failed_ratio) {
       reasons.push(`High failed login ratio: ${(indicators.failedAttemptsRatio * 100).toFixed(1)}%`);
     }
 
-    // Device consistency
     metrics['device_consistency'] = indicators.deviceConsistencyScore;
     if (indicators.deviceConsistencyScore < this.thresholds.min_device_consistency) {
       reasons.push('Low device consistency - frequent device changes');
     }
 
-    // Country changes
     metrics['country_changes_24h'] = indicators.countryChanges24h;
     if (indicators.countryChanges24h > 2) {
       reasons.push(`Multiple country changes: ${indicators.countryChanges24h} in 24h`);
@@ -235,9 +207,7 @@ export class FraudAgent {
     return { reasons, metrics };
   }
 
-  /**
-   * Check for account takeover patterns
-   */
+
   private checkAccountTakeover(
     history: Array<{
       timestamp: Date;
@@ -252,7 +222,6 @@ export class FraudAgent {
 
     const recent = history.slice(0, 10);
 
-    // Pattern 1: Multiple failed attempts followed by success from different device/IP
     const failedAttempts = recent.filter(h => !h.success);
     const successfulAttempts = recent.filter(h => h.success);
 
@@ -271,7 +240,6 @@ export class FraudAgent {
       }
     }
 
-    // Pattern 2: Sudden change in access patterns
     const oldPattern = history.slice(10, 30);
     if (oldPattern.length > 10) {
       const oldDevices = new Set(oldPattern.map(h => h.deviceId));
@@ -289,9 +257,6 @@ export class FraudAgent {
     return { suspected: false, reason: '' };
   }
 
-  /**
-   * Determine threat level
-   */
   private determineThreatLevel(
     fraudProbability: number,
     indicators: FraudIndicators
@@ -316,9 +281,6 @@ export class FraudAgent {
     return 'NONE';
   }
 
-  /**
-   * Generate recommendations based on threat level
-   */
   private generateRecommendations(
     threatLevel: 'NONE' | 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL',
     fraudProbability: number,
@@ -355,7 +317,6 @@ export class FraudAgent {
         break;
     }
 
-    // Specific recommendations
     if (indicators.automationDetected) {
       recommendations.push('Implement CAPTCHA or similar bot detection');
     }
@@ -365,31 +326,25 @@ export class FraudAgent {
     }
   }
 
-  /**
-   * Convert threat level to number for metrics
-   */
+
   private threatLevelToNumber(level: 'NONE' | 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'): number {
     const mapping = { NONE: 0, LOW: 1, MEDIUM: 2, HIGH: 3, CRITICAL: 4 };
     return mapping[level];
   }
 
-  /**
-   * Calculate confidence in fraud detection
-   */
+  
   private calculateConfidence(
     mlPrediction?: { confidence: number },
     history?: Array<any>
   ): number {
     const factors: number[] = [];
 
-    // ML confidence
     if (mlPrediction) {
       factors.push(mlPrediction.confidence);
     } else {
       factors.push(0.7);
     }
 
-    // Historical data
     if (history) {
       if (history.length > 30) {
         factors.push(0.9);
