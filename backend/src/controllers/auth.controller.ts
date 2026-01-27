@@ -2,7 +2,9 @@ import { Request, Response } from "express";
 import User from "../models/user.model";
 import { createSessionToken } from "../services/jwt.service";
 import { generateMFAChallengeData } from "./mfa.controller";
-import { sendPushNotification } from "../server"
+import { sendPushNotification } from "../server";
+import LoginEvent from "../models/loginEvent.model";
+import Device from "../models/device.model";
 
 interface AuthRequest extends Request {
   user?: { username: string };
@@ -33,7 +35,7 @@ export const register = async (req: Request, res: Response) => {
 
 export const login = async (req: Request, res: Response) => {
   try {
-    const { username, password, mfaMethod } = req.body;
+    const { username, password, mfaMethod, deviceName, browser, deviceOS } = req.body;
     if (!username || !password)
       return res.status(400).json({ success: false, message: 'Username and password required' });
 
@@ -41,25 +43,49 @@ export const login = async (req: Request, res: Response) => {
     if (!user) return res.status(401).json({ success: false, message: 'Invalid credentials' });
 
     const isMatch = await user.comparePassword(password);
-    if (!isMatch) return res.status(401).json({ success: false, message: 'Invalid credentials' });
 
     if (user.mfaEnabled) {
       const { mfaToken, challenge } = await generateMFAChallengeData(username, mfaMethod || 'otp');
+
+      await LoginEvent.create({
+        userId: user.id,
+        success: false,
+        ipAddress: req.ip,
+        userAgent: req.headers["user-agent"] || "",
+      });
+
       sendPushNotification(user.id, "mfa_challenge", { challenge, mfaMethod });
+
       return res.json({
         success: true,
         decision: { mfaRequired: true },
         mfaToken,
         challenge
       });
-    } else {
-      const sessionToken = createSessionToken(user, true);
-      return res.json({
-        success: true,
-        decision: { mfaRequired: false },
-        token: sessionToken
-      });
     }
+
+    const sessionToken = createSessionToken(user, true);
+
+    await LoginEvent.create({
+      userId: user.id,
+      success: isMatch,
+      ipAddress: req.ip,
+      userAgent: req.headers["user-agent"] || "",
+    });
+
+    if (deviceName && browser && deviceOS) {
+      const deviceExists = await Device.findOne({ userId: user.id, deviceName, ipAddress: req.ip });
+      if (!deviceExists) {
+        await Device.create({ userId: user.id, deviceName, ipAddress: req.ip, browser, deviceOS });
+        sendPushNotification(user.id, "new_device", { deviceName });
+      }
+    }
+
+    return res.json({
+      success: true,
+      decision: { mfaRequired: false },
+      token: sessionToken
+    });
 
   } catch (err) {
     console.error(err);
