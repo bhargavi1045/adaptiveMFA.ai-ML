@@ -5,6 +5,7 @@ import { generateMFAChallengeData } from "./mfa.controller";
 import { sendPushNotification } from "../server";
 import LoginEvent from "../models/loginEvent.model";
 import Device from "../models/device.model";
+import { geographicalRiskService } from "../services/geographical-risk.service";
 
 interface AuthRequest extends Request {
   user?: { username: string };
@@ -44,14 +45,68 @@ export const login = async (req: Request, res: Response) => {
 
     const isMatch = await user.comparePassword(password);
 
-    if (user.mfaEnabled) {
-      const { mfaToken, challenge } = await generateMFAChallengeData(username, mfaMethod || 'otp');
+    // Get client IP and user agent
+    //const ip = getClientIP(req);
+    const ip = req.body.ip || req.ip;
+    const userAgent = req.headers["user-agent"] || "Unknown";
+
+    // ✅ NEW: Assess geographical risk
+    const riskAssessment = await geographicalRiskService.assessGeographicalRisk(
+      user._id.toString(),
+      ip,
+      true
+    );
+
+    console.log('🌍 Risk Assessment:', {
+      score: riskAssessment.riskScore,
+      level: riskAssessment.riskLevel,
+      factors: riskAssessment.riskFactors
+    });
+
+    // ✅ NEW: Check if should block
+    if (riskAssessment.shouldBlock) {
+      await geographicalRiskService.saveLoginHistory(
+        user._id.toString(),
+        ip,
+        userAgent,
+        false,
+        riskAssessment,
+        'Blocked due to high risk'
+      );
 
       await LoginEvent.create({
         userId: user.id,
         success: false,
-        ipAddress: req.ip,
-        userAgent: req.headers["user-agent"] || "",
+        ipAddress: ip,
+        userAgent,
+      });
+
+      return res.status(403).json({
+        success: false,
+        error: 'Login blocked due to security concerns',
+        riskLevel: riskAssessment.riskLevel
+      });
+    }
+
+    if (user.mfaEnabled || riskAssessment.requiresMFA) {
+      const { mfaToken, challenge } = await generateMFAChallengeData(username, mfaMethod || 'otp');
+
+      await geographicalRiskService.saveLoginHistory(
+        user._id.toString(),
+        ip,
+        userAgent,
+        true,
+        riskAssessment,
+        undefined,
+        true,
+        false
+      );
+
+      await LoginEvent.create({
+        userId: user.id,
+        success: false,
+        ipAddress: ip,
+        userAgent,
       });
 
       sendPushNotification(user.id, "mfa_challenge", { challenge, mfaMethod });
@@ -60,23 +115,36 @@ export const login = async (req: Request, res: Response) => {
         success: true,
         decision: { mfaRequired: true },
         mfaToken,
-        challenge
+        challenge,
+        riskAssessment: {
+          score: riskAssessment.riskScore,
+          level: riskAssessment.riskLevel
+        }
       });
     }
+
+    // ✅ NEW: Save successful login
+    await geographicalRiskService.saveLoginHistory(
+      user._id.toString(),
+      ip,
+      userAgent,
+      true,
+      riskAssessment
+    );
 
     const sessionToken = createSessionToken(user, true);
 
     await LoginEvent.create({
       userId: user.id,
       success: isMatch,
-      ipAddress: req.ip,
-      userAgent: req.headers["user-agent"] || "",
+      ipAddress: ip,
+      userAgent,
     });
 
     if (deviceName && browser && deviceOS) {
-      const deviceExists = await Device.findOne({ userId: user.id, deviceName, ipAddress: req.ip });
+      const deviceExists = await Device.findOne({ userId: user.id, deviceName, ipAddress: ip });
       if (!deviceExists) {
-        await Device.create({ userId: user.id, deviceName, ipAddress: req.ip, browser, deviceOS });
+        await Device.create({ userId: user.id, deviceName, ipAddress: ip, browser, deviceOS });
         sendPushNotification(user.id, "new_device", { deviceName });
       }
     }
@@ -84,7 +152,11 @@ export const login = async (req: Request, res: Response) => {
     return res.json({
       success: true,
       decision: { mfaRequired: false },
-      token: sessionToken
+      token: sessionToken,
+      riskAssessment: {
+        score: riskAssessment.riskScore,
+        level: riskAssessment.riskLevel
+      }
     });
 
   } catch (err) {
@@ -100,3 +172,13 @@ export const logout = async (_req: AuthRequest, res: Response) => {
 export const status = async (req: AuthRequest, res: Response) => {
   return res.json({ success: true, authenticated: !!req.user, user: req.user || null });
 };
+
+// Helper to get real client IP
+function getClientIP(req: Request): string {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (forwarded) {
+    const ips = (forwarded as string).split(',');
+    return ips[0].trim();
+  }
+  return req.socket.remoteAddress || req.ip || '127.0.0.1';
+}

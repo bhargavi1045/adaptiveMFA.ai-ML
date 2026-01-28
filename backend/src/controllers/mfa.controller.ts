@@ -7,8 +7,12 @@ import { generateTOTPSecret, verifyTOTPCode } from "../services/totp.service";
 import { generateFingerprintAuth, verifyFingerprintAuth } from "../services/fingerprint.service";
 import { sendSMS } from "../services/sms.service";
 import { createSessionToken } from "../services/jwt.service";
+import dotenv from "dotenv";
 
-const JWT_SECRET = process.env.JWT_SECRET!;
+dotenv.config();
+
+const JWT_SECRET = process.env.JWT_SECRET || "supersecretkey";
+
 const MFA_TOKEN_TTL = "5m";
 
 interface MFAVerifyBody {
